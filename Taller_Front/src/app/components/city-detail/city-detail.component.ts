@@ -1,13 +1,17 @@
 import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+
 import { City } from '../../models/city.model';
+import { WeatherDetail } from '../../models/weather.model';
 import { WeatherRecord } from '../../models/weather-record.model';
+
+import { WeatherService } from '../../services/weather.service';
 import { WeatherRecordService } from '../../services/weather-record.service';
 
 /*
  * Implementar:
- * HU-03 — Detalle de Ciudad con Clima (Ver TALLER.md Parte B)
- * HU-04 — Historial de Registros de Clima (Ver TALLER.md Parte D)
+ * HU-03 — Detalle de Ciudad con Clima
+ * HU-04 — Historial de Registros de Clima
  */
 
 @Component({
@@ -17,23 +21,69 @@ import { WeatherRecordService } from '../../services/weather-record.service';
   templateUrl: './city-detail.component.html'
 })
 export class CityDetailComponent implements OnChanges {
+  private weatherService = inject(WeatherService);
   private weatherRecordService = inject(WeatherRecordService);
 
   @Input() city!: City;
 
+  weatherDetail: WeatherDetail | null = null;
   weatherRecords: WeatherRecord[] = [];
+  loading: boolean = false;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['city'] && this.city) {
-      this.weatherRecordService.getRecords(this.city.id)
-        .subscribe(records => this.weatherRecords = records);
-
-      // TODO HU-03: Agregar aquí el obtener el clima de la ciudad
+      this.loadWeather();
+      this.loadWeatherRecords();
     }
   }
 
+  loadWeather(): void {
+    this.loading = true;
+    this.weatherDetail = null;
+
+    this.weatherService.getWeather(this.city.name).subscribe({
+      next: (weather) => {
+        this.weatherDetail = weather;
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error cargando clima:', error);
+        this.weatherDetail = null;
+        this.loading = false;
+      }
+    });
+  }
+
+  loadWeatherRecords(): void {
+    this.weatherRecordService.getRecords(this.city.id).subscribe({
+      next: (records) => {
+        this.weatherRecords = records;
+      },
+      error: (error) => {
+        console.error('Error cargando historial:', error);
+        this.weatherRecords = [];
+      }
+    });
+  }
+
   saveWeather(): void {
-    // TODO HU-04: Agregar aquí el código para guardar un nuevo registro de clima
-    //             Al completar, recarga la lista con weatherRecordService.getRecords(this.city.id).
+    if (!this.weatherDetail) {
+      return;
+    }
+
+    const record = {
+      tempC: this.weatherDetail.temp_c,
+      condition: this.weatherDetail.condition,
+      humidity: this.weatherDetail.humidity
+    };
+
+    this.weatherRecordService.saveRecord(this.city.id, record).subscribe({
+      next: () => {
+        this.loadWeatherRecords();
+      },
+      error: (error) => {
+        console.error('Error guardando clima:', error);
+      }
+    });
   }
 }
